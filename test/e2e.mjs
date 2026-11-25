@@ -153,10 +153,11 @@ try {
   check(await page.evaluate(() => document.querySelectorAll('canvas').length <= 4), 'como mucho 4 lienzos vivos');
   await page.reload({ waitUntil: 'load' }); await page.waitForSelector('.viewer'); await at(5);
   check(true, 'si la app se reinicia vuelve a la misma página');
-  await click('Ir a…'); await click('Página 2', '.sheet button'); await at(2);
+  await click('Ir a página'); await click('Página 2', '.sheet button'); await at(2);
 
   // --- ajustes
-  await click('Ajustes');
+  const more = async (t) => { await click('Más', '.bar button'); await click(t, '.sheet button'); };
+  await more('Mejorar la imagen');
   const slide = (i, v) => page.evaluate((i, v) => { const x = document.querySelectorAll('.srow input')[i]; x.value = v; x.dispatchEvent(new Event('input')); }, i, v);
   await slide(0, 20); await sleep(700);
   check(/brightness\(1\.2\)/.test(await page.evaluate(() => document.querySelector('.page canvas').style.filter)), 'brillo con filtro CSS');
@@ -173,7 +174,8 @@ try {
   await page.evaluate(() => { const d = [...document.querySelectorAll('.abar .dot')]; d[9].click(); }); await sleep(100);
   await drag([[300, 600], [400, 640], [500, 600]]);
   await click('Resaltar', '.abar button'); await drag([[200, 500], [600, 500]]);
-  await click('Texto', '.abar button'); await page.touchscreen.tap(400, 300); await page.waitForSelector('.modal input'); await fill('3 p'); await click('Poner'); await sleep(300);
+  // El texto se dibuja siempre derecho (no gira con la página): va en azul para no entrar en el centro de la tinta roja.
+  await click('Texto', '.abar button'); await page.evaluate(() => document.querySelectorAll('.abar .dot')[2].click()); await sleep(100); await page.touchscreen.tap(400, 300); await page.waitForSelector('.modal input'); await fill('3 p'); await click('Poner'); await sleep(300);
   const notes = async () => (await idb('notes'))[d1.id + '/2'] || [];
   let N = await notes();
   check(N.length === 4 && N.map((n) => n.t).join() === 'pen,pen,mark,text', 'lápiz, resaltador y texto guardados');
@@ -186,7 +188,7 @@ try {
   // Centro de la tinta roja proyectado a la página: debe ser el mismo antes y después.
   const red = () => page.evaluate(() => { const c = document.querySelector('.over'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let x = 0, y = 0, n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 180 && d[i + 1] < 40 && d[i + 2] < 60 && d[i + 3] > 200) { const p = i / 4; x += p % c.width; y += Math.floor(p / c.width); n++; } return [x / n / c.width, y / n / c.height, n]; });
   const r0 = await red();
-  await click('Ajustes'); await slide(3, 0); await sleep(5000);
+  await more('Mejorar la imagen'); await slide(3, 0); await sleep(5000);
   await click('Recortar márgenes'); await page.waitForSelector('.crop', { timeout: 15000 });
   const bx = await page.evaluate(() => { const r = document.querySelector('.hd-nw').getBoundingClientRect(); return [r.left + 24, r.top + 24]; });
   await drag([bx, [bx[0] + 50, bx[1] + 60], [bx[0] + 100, bx[1] + 120]]); await shot('recorte'); const rc = await red();
@@ -199,15 +201,15 @@ try {
   const r2 = await red(), a2 = (await idb('docs'))[d1.id].adj.all; await shot('girada');
   check(a2.rot === 90 && Math.abs(r2[0] - (1 - r1[1])) < 0.006 && Math.abs(r2[1] - r1[0]) < 0.006, 'y al girar 90°');
   await click('⟲ 90°'); await sleep(900); await click('Listo', '.panel button');
-  await click('☾'); await sleep(300); await shot('noche'); await click('☾');
+  await more('noche'); await sleep(300); await shot('noche'); await more('noche');
   await page.setViewport({ width: 1024, height: 768, deviceScaleFactor: 2, hasTouch: true }); await sleep(1500);
-  await click('Vista'); await click('Dos páginas', '.sheet button'); await sleep(5000);
+  await more('Cambiar la vista'); await click('Dos páginas', '.sheet button'); await sleep(5000);
   check(await page.evaluate(() => document.querySelectorAll('.spread .page').length === 2), 'dos páginas en horizontal'); await shot('dos');
-  await click('Vista'); await click('Ajustar al ancho', '.sheet button'); await page.waitForFunction(() => document.querySelectorAll('.spread .page').length === 1 && document.querySelector('.page').clientHeight > 900, { timeout: 30000 }); await sleep(200);
+  await more('Cambiar la vista'); await click('Ajustar al ancho', '.sheet button'); await page.waitForFunction(() => document.querySelectorAll('.spread .page').length === 1 && document.querySelector('.page').clientHeight > 900, { timeout: 30000 }); await sleep(200);
   await tap(1000, 400); check(/-\d{2,}px/.test(await page.evaluate(() => document.querySelector('.spread').style.transform)), 'al ancho, el toque baja antes de pasar página');
-  await click('Vista'); await click('Página entera', '.sheet button'); await sleep(1500);
+  await more('Cambiar la vista'); await click('Página entera', '.sheet button'); await sleep(1500);
   await page.setViewport({ width: 768, height: 1024, deviceScaleFactor: 2, hasTouch: true }); await sleep(800);
-  await click('‹ Salir'); await page.waitForSelector('.tabs');
+  await click('‹ Volver'); await page.waitForSelector('.tabs');
 
   // --- organización
   await click('Nueva carpeta'); await fill('Piano'); await click('Crear');
@@ -226,15 +228,16 @@ try {
   const gp = await page.evaluate(() => [...document.querySelectorAll('.grip')].map((g) => { const r = g.getBoundingClientRect(); return [r.left + 20, r.top + 20]; }));
   await drag([gp[0], [gp[0][0], gp[1][1]], [gp[2][0], gp[2][1] + 5]]); await sleep(300);
   const i1 = await items(); check(i0.length === 3 && i1.join() === [i0[1], i0[2], i0[0]].join(), 'reordenar arrastrando'); await shot('concierto');
-  await click('Modo concierto'); await page.waitForSelector('.viewer.concert'); await at(1);
-  check(await page.evaluate(() => ![...document.querySelectorAll('button')].some((b) => /Anotar|Ajustes/.test(b.textContent))), 'modo concierto sin edición');
+  await click('Tocar el concierto'); await page.waitForSelector('.viewer.concert'); await at(1);
+  check(await page.evaluate(() => ![...document.querySelectorAll('button')].some((b) => /Anotar|Ir a página|^Más$/.test(b.textContent))), 'modo concierto sin edición');
   for (let i = 0; i < 30; i++) { if (await page.evaluate(() => document.querySelector('.bar .grow').textContent.startsWith('2 de 3'))) break; await tap(720); await sleep(350); }
   await at(1); check(await page.evaluate(() => document.querySelector('.bar .grow').textContent.startsWith('2 de 3')), 'al acabar pasa a la siguiente obra');
   await tap(60); await sleep(800); check(await page.evaluate(() => document.querySelector('.bar .grow').textContent.startsWith('1 de 3')), 'y hacia atrás vuelve a la anterior');
-  await page.touchscreen.tap(384, 500); await sleep(200); await click('‹ Salir'); await text('Modo concierto'); await click('‹ Conciertos');
+  await page.touchscreen.tap(384, 500); await sleep(200); await click('‹ Volver'); await text('Tocar el concierto'); await click('‹ Conciertos');
 
   // --- copias
-  await click('Copias y opciones', '.tab'); await sleep(300); await shot('opciones');
+  const moreOpts = async () => { if (await page.evaluate(() => !!document.querySelector('.moreopts.hidden'))) await click('Mostrar más opciones'); };
+  await click('Opciones', '.tab'); await sleep(300); await shot('opciones');
   await click('Copia completa'); await page.waitForFunction(() => [...document.querySelectorAll('.modal')].some((m) => /Copia guardada|Conectar con/.test(m.textContent)), { timeout: 60000 });
   if (await page.evaluate(() => /Conectar con/.test(document.body.textContent))) { await fill(code()); await click('Conectar'); await text('Copia guardada', 60000); }
   await click('Entendido');
@@ -242,12 +245,13 @@ try {
   const before = JSON.stringify([await idb('docs'), await idb('notes'), await idb('concerts'), await idb('folders')].map((o) => Object.keys(o).sort()));
   await page.evaluate(() => new Promise((ok) => { const r = indexedDB.open('atril'); r.onsuccess = () => { const t = r.result.transaction(['docs', 'chunks', 'notes', 'folders', 'concerts', 'meta'], 'readwrite'); ['docs', 'chunks', 'notes', 'folders', 'concerts', 'meta'].forEach((s) => t.objectStore(s).clear()); t.oncomplete = () => { r.result.close(); ok(); }; }; }));
   await page.reload({ waitUntil: 'load' }); await text('Todavía no hay partituras');
-  await click('Copias y opciones', '.tab'); await click('Recuperar del PC'); await fill(code()); await click('Conectar'); await page.waitForSelector('.sheet button'); await page.evaluate(() => document.querySelector('.sheet button').click());
+  await click('Opciones', '.tab'); await click('Recuperar del PC'); await fill(code()); await click('Conectar'); await page.waitForSelector('.sheet button'); await page.evaluate(() => document.querySelector('.sheet button').click());
   await text('Restaurar copia'); await click('Restaurar', '.foot button'); await text('Copia restaurada', 60000); await shot('restaurada'); await click('Entendido');
   const after = JSON.stringify([await idb('docs'), await idb('notes'), await idb('concerts'), await idb('folders')].map((o) => Object.keys(o).sort()));
   console.log('  --   ' + before.length + ' / ' + after.length);
   check(before === after, 'borrado total y recuperación: todo igual');
   check(Object.values(await idb('docs')).every((d) => d.blob), 'con todos sus PDFs');
+  await moreOpts();
   const good = fs.readFileSync(path.join(tmp, 'copias', fs.readdirSync(path.join(tmp, 'copias')).find((n) => n.endsWith('.json'))), 'utf8');
   for (const [n, f] of [['__proto__', (j) => { j.docs[0].id = '__proto__'; }], ['nota fuera de rango', (j) => { const k = Object.keys(j.notes)[0]; j.notes[k][0].p[0] = 1e9; }], ['color con código', (j) => { const k = Object.keys(j.notes)[0]; j.notes[k][0].c = 'url(x)'; }], ['carpetas en bucle', (j) => { j.folders[0].parent = j.folders[0].id; }], ['tipo cambiado', (j) => { j.docs = {}; }], ['nombre objeto', (j) => { j.docs[0].name = { a: 1 }; }]]) {
     const j = JSON.parse(good); f(j);
@@ -266,7 +270,7 @@ try {
   await up(path.join(tmp, 'partituras', 'falso.pdf')); await text('no es un PDF'); await click('Entendido'); check(true, 'rechaza un archivo sin cabecera %PDF');
   await up(path.join(root, 'test/pdfs/limpio.pdf')); await text('ya estaba como'); await click('Entendido'); check(true, 'detecta duplicados del iPad');
 
-  await click('Copias y opciones', '.tab'); await click('Diagnóstico');
+  await click('Opciones', '.tab'); await moreOpts(); await click('Diagnóstico');
   await page.waitForFunction(() => /Terminado/.test(document.body.textContent), { timeout: 120000 });
   const rows = await page.evaluate(() => [...document.querySelectorAll('.row')].map((r) => [r.className.includes('ok'), [...r.children].map((k) => k.textContent).join(' → ')]));
   for (const [ok, t] of rows) if (!ok && !/icono|AppCache/.test(t)) check(false, t);
@@ -275,7 +279,7 @@ try {
   // --- sin servidor
   srv.kill(); await sleep(400);
   await click('Partituras', '.tab'); await click('Mal escaneo', '.item .tapable'); await at(1).catch(() => at(2)); check(true, 'con el servidor apagado se abre y se lee');
-  await click('‹ Salir'); await page.waitForSelector('.tabs'); await click('Importar desde el PC'); await text('No encuentro el PC'); check(true, 'y al importar lo explica');
+  await click('‹ Volver'); await page.waitForSelector('.tabs'); await click('Importar desde el PC'); await text('No encuentro el PC'); check(true, 'y al importar lo explica');
   check(!ext.length, 'ninguna petición fuera del servidor ' + ext.join(' '));
   const real = errs.filter((e) => !/favicon|status of 40|ERR_CONNECTION/.test(e));
   check(!real.length, 'consola sin errores ' + real.slice(0, 5).join(' | '));

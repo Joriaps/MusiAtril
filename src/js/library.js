@@ -6,8 +6,11 @@ import { importScreen, addFiles } from './importer.js';
 import { openReader } from './reader.js';
 import { newConcert, concertsTab } from './concerts.js';
 import { settingsTab } from './settings.js';
+import { helpTab } from './help.js';
+import { updateReady, applyUpdate } from './offline.js';
 
 const st = { tab: 'lib', folder: '', q: '', tag: '', sel: null, top: 0 };
+const DAY = 86400000;
 let root = null;
 
 export function start(el) { root = el; }
@@ -17,10 +20,20 @@ export function home() {
   const tab = (t, text) => h('button', { class: 'tab' + (st.tab === t ? ' on' : ''), click: () => setTab(t) }, text);
   const body = h('div', { class: 'tabbody' });
   const warn = /iP(ad|hone|od)/.test(navigator.userAgent) && !navigator.standalone ? h('div', { class: 'card warn' }, h('span', { text: 'Espera al aviso «Lista», pulsa Compartir › «Añadir a pantalla de inicio» y usa Atril siempre desde su icono.' })) : null;
-  clear(root).appendChild(h('div', { class: 'screen col' }, h('div', { class: 'tabs' }, tab('lib', 'Partituras'), tab('con', 'Conciertos'), tab('set', 'Copias y opciones')), warn, body));
+  const update = updateReady() ? h('div', { class: 'card state-update' }, h('span', { class: 'grow', text: 'Hay una versión nueva de Atril.' }), h('button', { class: 'main', click: applyUpdate }, 'Actualizar ahora')) : null;
+  clear(root).appendChild(h('div', { class: 'screen col' }, h('div', { class: 'tabs' }, tab('lib', 'Partituras'), tab('con', 'Conciertos'), tab('set', 'Opciones'), tab('help', 'Ayuda')), warn, update, body));
   if (st.tab === 'con') concertsTab(body, root, home);
   else if (st.tab === 'set') settingsTab(body, root, home);
+  else if (st.tab === 'help') helpTab(body, () => setTab('lib'));
   else libraryTab(body);
+}
+
+// Recordatorio suave: solo si hay partituras de hace más de una semana y ninguna copia en un mes.
+function backupCard() {
+  const old = list('docs').some((d) => Date.now() - (d.added || 0) > 7 * DAY);
+  if (!old || Date.now() - (lib.prefs.backup || 0) < 30 * DAY) return null;
+  return h('div', { class: 'card warn' }, h('span', { class: 'grow', text: lib.prefs.backup ? 'Hace más de un mes que no guardas una copia de seguridad.' : 'Todavía no has guardado ninguna copia de seguridad.' }),
+    h('button', { click: () => setTab('set') }, 'Guardar una copia'));
 }
 
 const SORT = { name: 'Nombre', composer: 'Compositor', added: 'Fecha de llegada', opened: 'Última vez abierta' };
@@ -43,7 +56,7 @@ export function filterDocs(q, tag) {
 function libraryTab(body) {
   if (st.folder && !lib.folders[st.folder]) st.folder = '';
   const rows = h('div', { class: 'rows scroll fillrows' });
-  const search = h('input', { type: 'text', class: 'search', placeholder: 'Buscar por nombre, compositor o etiqueta', autocomplete: 'off', autocorrect: 'off', autocapitalize: 'none' });
+  const search = h('input', { type: 'text', class: 'search', placeholder: 'Buscar una partitura', autocomplete: 'off', autocorrect: 'off', autocapitalize: 'none' });
   search.value = st.q;
   let t = 0;
   search.addEventListener('input', () => { st.q = search.value; clearTimeout(t); t = setTimeout(draw, 200); });
@@ -55,9 +68,11 @@ function libraryTab(body) {
       if (f.length) addFiles(f, st.folder).then(home, oops);
     },
   });
+  const remind = backupCard();
+  if (remind) body.appendChild(remind);
   body.appendChild(h('div', { class: 'tools' },
     __WEB__ ? null : h('button', { class: 'main', click: () => importScreen(root, st.folder, home).catch(oops) }, 'Importar desde el PC'),
-    h('label', { class: __WEB__ ? 'btn main' : 'btn' }, 'Añadir desde el iPad', input),
+    h('label', { class: __WEB__ ? 'btn main' : 'btn' }, __WEB__ ? '＋ Añadir partituras' : 'Añadir desde el iPad', input),
     h('button', { click: newFolder }, 'Nueva carpeta'),
     h('span', { class: 'grow' }),
     h('button', { class: st.sel ? 'on' : '', click: () => { st.sel = st.sel ? null : {}; home(); } }, st.sel ? 'Terminar' : 'Seleccionar')));
@@ -83,10 +98,12 @@ function libraryTab(body) {
   function crumbs(searching, n) {
     clear(path);
     if (searching) { path.appendChild(h('span', { text: n + (n === 1 ? ' resultado en toda la biblioteca' : ' resultados en toda la biblioteca') })); return; }
+    // En la raíz no hace falta el camino: solo dentro de una carpeta, para saber volver.
+    if (!st.folder) return;
     const l = [];
     for (let f = lib.folders[st.folder], i = 0; f && i < 30; f = lib.folders[f.parent], i++) l.unshift(f);
     const go = (id, text) => path.appendChild(h('button', { class: 'crumb', click: () => { st.folder = id; st.top = 0; home(); } }, text));
-    go('', 'Todas');
+    go('', '‹ Todas las partituras');
     l.forEach((f) => { path.appendChild(h('span', { text: '›' })); go(f.id, f.name); });
   }
 
@@ -98,19 +115,19 @@ function libraryTab(body) {
       const n = list('docs').filter((d) => d.folder === f.id).length + children(f.id).length;
       rows.appendChild(h('div', { class: 'item' }, h('span', { class: 'ico', text: '📁' }),
         h('span', { class: 'grow tapable', click: () => { st.folder = f.id; st.top = 0; home(); } }, h('b', { text: f.name }), h('small', { text: n + (n === 1 ? ' elemento' : ' elementos') })),
-        h('button', { class: 'flat', 'aria-label': 'Opciones de la carpeta', click: () => folderMenu(f) }, '⋯')));
+        h('button', { class: 'more', 'aria-label': 'Opciones de la carpeta', click: () => folderMenu(f) }, 'Más')));
     });
     docs.forEach((d) => {
       const cb = st.sel ? h('input', { type: 'checkbox', onchange: () => { if (cb.checked) st.sel[d.id] = 1; else delete st.sel[d.id]; footer(); } }) : null;
       if (cb) cb.checked = !!st.sel[d.id];
-      const sub = [d.composer, d.blob ? (d.pages ? d.pages + ' pág.' : '') : 'falta el PDF', (d.tags || []).join(', ')].filter(Boolean).join(' · ');
-      const inner = h('span', { class: 'grow tapable' }, h('b', { text: d.name }), h('small', { text: sub || mb(d.size) }));
+      const sub = [d.composer, d.blob ? (d.pages ? d.pages + (d.pages === 1 ? ' página' : ' páginas') : '') : 'falta el archivo: vuelve a añadirla', (d.tags || []).join(', ')].filter(Boolean).join(' · ');
+      const inner = h('span', { class: 'grow tapable' }, h('b', { text: d.name }), h('small', { text: sub }));
       const row = h(cb ? 'label' : 'div', { class: 'item' + (d.blob ? '' : ' dim') }, cb || h('span', { class: 'ico', text: '♪' }), inner,
-        cb ? null : h('button', { class: 'flat', 'aria-label': 'Opciones de la partitura', click: () => docMenu(d) }, '⋯'));
+        cb ? null : h('button', { class: 'more', 'aria-label': 'Opciones de la partitura', click: () => docMenu(d) }, 'Más'));
       if (!cb) inner.addEventListener('click', () => read(d));
       rows.appendChild(row);
     });
-    if (!rows.firstChild) rows.appendChild(h('p', { class: 'empty', text: searching ? 'Nada coincide con la búsqueda.' : list('docs').length ? 'Esta carpeta está vacía.' : __WEB__ ? 'Todavía no hay partituras. Pulsa «Añadir desde el iPad» y elígelas en Archivos (por ejemplo, en Descargas).' : 'Todavía no hay partituras. Pulsa «Importar desde el PC» con el servidor encendido.' }));
+    if (!rows.firstChild) rows.appendChild(h('p', { class: 'empty', text: searching ? 'Nada coincide con la búsqueda.' : list('docs').length ? 'Esta carpeta está vacía.' : __WEB__ ? 'Todavía no hay partituras. Pulsa «Añadir partituras» y elígelas en Archivos (por ejemplo, en Descargas).' : 'Todavía no hay partituras. Pulsa «Importar desde el PC» con el servidor encendido.' }));
     footer();
   }
 
@@ -141,7 +158,7 @@ function newFolder() {
 function folderMenu(f) {
   acciones(f.name, [
     { text: 'Cambiar nombre', fn: () => pedir('Cambiar nombre', [{ k: 'name', label: 'Nombre', value: f.name }]).then((r) => (r && r.name ? change('folders', f.id, { name: r.name }).then(home) : null)).catch(oops) },
-    { text: 'Mover a…', fn: () => elegir('Mover «' + f.name + '» a', tree(f.id)).then((v) => (v === undefined ? null : change('folders', f.id, { parent: v }).then(home))).catch(oops) },
+    { text: 'Mover a otra carpeta', fn: () => elegir('Mover «' + f.name + '» a', tree(f.id)).then((v) => (v === undefined ? null : change('folders', f.id, { parent: v }).then(home))).catch(oops) },
     { text: 'Crear concierto con sus partituras', fn: () => newConcert(list('docs').filter((d) => d.folder === f.id).sort(byName).map((d) => d.id), f.name, () => setTab('con')) },
     { text: 'Borrar carpeta', danger: true, fn: () => confirmar('Borrar carpeta', 'Se borra «' + f.name + '». Sus partituras y subcarpetas no se borran: suben un nivel.', 'Borrar carpeta', true).then((y) => (y ? removeFolder(f.id).then(home) : null)).catch(oops) },
   ]);
@@ -151,10 +168,10 @@ function docMenu(d) {
   acciones(d.name, [
     { text: 'Abrir', fn: () => read(d) },
     { text: 'Editar nombre, compositor y etiquetas', fn: () => edit(d) },
-    { text: 'Mover a…', fn: () => moveDocs([d.id], home) },
+    { text: 'Mover a otra carpeta', fn: () => moveDocs([d.id], home) },
     { text: 'Añadir a un concierto', fn: () => toConcert([d.id], home) },
-    { text: 'Información', fn: () => modal(d.name, h('div', null, h('p', { text: 'Tamaño: ' + mb(d.size) }), h('p', { text: 'Páginas: ' + (d.pages || '—') }), h('p', { text: 'Añadida: ' + new Date(d.added).toLocaleDateString('es-ES') }), h('p', { text: 'Origen en el PC: ' + (d.src || '—') })), []) },
-    { text: 'Borrar', danger: true, fn: () => delDocs([d.id], home) },
+    { text: 'Información', fn: () => modal(d.name, h('div', null, h('p', { text: 'Tamaño: ' + mb(d.size) }), h('p', { text: 'Páginas: ' + (d.pages || '—') }), h('p', { text: 'Añadida: ' + new Date(d.added).toLocaleDateString('es-ES') }), __WEB__ ? null : h('p', { text: 'Origen en el PC: ' + (d.src || '—') })), []) },
+    { text: 'Borrar del iPad', danger: true, fn: () => delDocs([d.id], home) },
   ]);
 }
 

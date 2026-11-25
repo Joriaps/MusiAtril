@@ -4,9 +4,9 @@ import { openStored } from './engine.js';
 import { adjust, cssFilter } from './geometry.js';
 import { lib, pref, setPage, change } from './lib.js';
 import * as db from './db.js';
-import { loadNotes, redraw, NoteLayer, COLORS, MARKS, PEN, MARK, TEXT, ERASE, penTouch, pairPen } from './notes.js';
+import { loadNotes, redraw, NoteLayer, COLORS, MARKS, PEN, MARK, TEXT, ERASE, penTouch } from './notes.js';
 import { adjustPanel } from './adjust.js';
-import { toast, oops, modalOpen, elegir } from './ui.js';
+import { toast, oops, modalOpen, elegir, acciones } from './ui.js';
 
 // o: {list: [idDoc], index, concert, title, page, onExit}
 export function openReader(root, o) {
@@ -24,17 +24,44 @@ export function openReader(root, o) {
   const two = () => { const s = size(); return lib.prefs.fit === 'two' && s[0] > s[1]; };
   const step = () => (two() ? 2 : 1);
 
-  // --- barra
+  // --- barra: a la vista solo lo de cada día; lo demás, en «Más» con nombres que dicen qué hace.
   function buildBar() {
     clear(bar);
-    bar.appendChild(h('button', { click: exit }, '‹ Salir'));
+    bar.appendChild(h('button', { click: exit }, '‹ Volver'));
     bar.appendChild(info);
     if (o.concert) { bar.appendChild(h('button', { click: pickWork }, 'Obras')); return; }
     bar.appendChild(h('button', { class: annot ? 'on' : '', click: toggleAnnot }, '✎ Anotar'));
-    bar.appendChild(h('button', { click: openAdjust }, 'Ajustes'));
-    bar.appendChild(h('button', { click: pickFit }, 'Vista'));
-    bar.appendChild(h('button', { click: pickPage }, 'Ir a…'));
-    bar.appendChild(h('button', { class: lib.prefs.night ? 'on' : '', click: night }, '☾'));
+    bar.appendChild(h('button', { click: pickPage }, 'Ir a página'));
+    bar.appendChild(h('button', { click: moreMenu }, 'Más'));
+  }
+  function moreMenu() {
+    acciones('Más opciones', [
+      { text: 'Mejorar la imagen (brillo, recortar, girar)', fn: openAdjust },
+      { text: 'Cambiar la vista (página entera, al ancho, dos páginas)', fn: pickFit },
+      { text: lib.prefs.night ? 'Quitar el modo noche' : 'Modo noche (fondo negro)', fn: night },
+    ]);
+  }
+
+  // Las tres primeras veces se enseña dónde tocar. No recibe toques: se quita con el primero o a los 10 s.
+  function showHint() {
+    if ((lib.prefs.hints || 0) >= 3) return;
+    pref('hints', (lib.prefs.hints || 0) + 1).catch(oops);
+    const el = h('div', { class: 'hint' },
+      h('div', { class: 'hz' }, h('b', { text: '‹' }), h('span', { text: 'Toca aquí para volver a la página anterior' })),
+      h('div', { class: 'hz mid' }, h('span', { text: 'Toca aquí para ver u ocultar los botones' })),
+      h('div', { class: 'hz' }, h('b', { text: '›' }), h('span', { text: 'Toca aquí para pasar página' })));
+    view.appendChild(el);
+    const off = () => {
+      clearTimeout(t);
+      if (el.parentNode) el.parentNode.removeChild(el);
+      stage.removeEventListener('touchstart', off);
+      stage.removeEventListener('mousedown', off);
+      document.removeEventListener('keydown', off);
+    };
+    const t = setTimeout(off, 10000);
+    stage.addEventListener('touchstart', off);
+    stage.addEventListener('mousedown', off);
+    document.addEventListener('keydown', off);
   }
   function label() {
     const d = doc(), t = d ? d.name : '', last = Math.min(page + step() - 1, pdf ? pdf.pages : page);
@@ -204,7 +231,7 @@ export function openReader(root, o) {
     const d = doc();
     (old ? old.close() : Promise.resolve()).then(() => {
       if (!d) throw new Error('esta partitura ya no existe');
-      if (!d.blob) throw new Error('falta el PDF. Vuelve a importarlo desde el PC');
+      if (!d.blob) throw new Error(__WEB__ ? 'falta el archivo. Vuelve a añadirla con «Añadir partituras»' : 'falta el PDF. Vuelve a importarlo desde el PC');
       return openStored(d);
     }).then((p) => {
       if (dead) { p.close(); return; }
@@ -273,12 +300,12 @@ export function openReader(root, o) {
     });
     bottom.appendChild(h('span', { class: 'sep' }));
     const a = active(), B = (text, ok, fn) => bottom.appendChild(h('button', { disabled: !ok, click: fn }, text));
-    B('↶', a && a.undoList.length, () => active().undo());
-    B('↷', a && a.redoList.length, () => active().redo());
-    bottom.appendChild(h('button', { class: lib.prefs.hand !== 'finger' ? 'on' : '', click: () => pairPen(lib.prefs, (hand, radius) => { lib.prefs.radius = radius; pref('hand', hand).then(buildTools, oops); }) }, 'Enlazar lápiz'));
-    bottom.appendChild(h('button', { click: () => go(-1) }, '◀'));
-    bottom.appendChild(h('button', { click: () => go(1) }, '▶'));
-    bottom.appendChild(h('button', { class: 'main', click: toggleAnnot }, 'Listo'));
+    B('↶ Deshacer', a && a.undoList.length, () => active().undo());
+    B('↷ Rehacer', a && a.redoList.length, () => active().redo());
+    // «Enlazar un lápiz» está en Opciones: aquí solo lo que se usa al escribir.
+    bottom.appendChild(h('button', { 'aria-label': 'Página anterior', click: () => go(-1) }, '◀'));
+    bottom.appendChild(h('button', { 'aria-label': 'Página siguiente', click: () => go(1) }, '▶'));
+    bottom.appendChild(h('button', { class: 'main', click: toggleAnnot }, '✓ Listo'));
     if (stageH && bottom.offsetHeight > stageH) { fitStage(); show(true); }
   }
 
@@ -409,5 +436,6 @@ export function openReader(root, o) {
   window.addEventListener('resize', onResize);
   buildBar();
   if (o.concert) { bar.classList.add('hidden'); view.classList.add('concert'); }
+  showHint();
   load(o.page || (o.concert ? 1 : 0));
 }

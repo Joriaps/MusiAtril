@@ -8,7 +8,8 @@ export function toast(text, long) {
   document.body.appendChild(toastEl);
   clearTimeout(toastTimer);
   const mine = toastEl;
-  toastTimer = setTimeout(() => { if (mine.parentNode) mine.parentNode.removeChild(mine); }, long ? 7000 : 2800);
+  // Tiempo de sobra para leerlo con calma.
+  toastTimer = setTimeout(() => { if (mine.parentNode) mine.parentNode.removeChild(mine); }, long ? 9000 : 4500);
 }
 export function oops(e) { toast(e && e.message || String(e), true); }
 

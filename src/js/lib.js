@@ -2,7 +2,8 @@
 import * as db from './db.js';
 
 export const lib = { docs: {}, folders: {}, concerts: {}, prefs: {} };
-const PREFS = { sort: 'name', fit: 'page', night: 0, maxMB: 300, pen: null, hand: 'finger', radius: 0, backup: 0 };
+// hints: veces que el lector ha enseñado dónde tocar (se deja de enseñar a la tercera).
+const PREFS = { sort: 'name', fit: 'page', night: 0, maxMB: 300, pen: null, hand: 'finger', radius: 0, backup: 0, hints: 0 };
 
 export function load() {
   return db.tx(['docs', 'folders', 'concerts', 'meta'], 'readonly', (s, set) => {

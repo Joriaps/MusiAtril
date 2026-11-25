@@ -18,7 +18,7 @@ export function newConcert(items, name, done) {
 
 export function concertsTab(body, root, home) {
   const rows = h('div', { class: 'rows scroll fillrows' });
-  body.appendChild(h('div', { class: 'tools' }, h('button', { class: 'main', click: () => newConcert([], '', (c) => detail(root, c.id, home)) }, 'Concierto nuevo')));
+  body.appendChild(h('div', { class: 'tools' }, h('button', { class: 'main', click: () => newConcert([], '', (c) => detail(root, c.id, home)) }, '＋ Concierto nuevo')));
   body.appendChild(rows);
   const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   // Primero los próximos por fecha, luego los que no tienen fecha y al final los pasados.
@@ -27,9 +27,9 @@ export function concertsTab(body, root, home) {
     rows.appendChild(h('div', { class: 'item' + (rank(c) === 2 ? ' dim' : '') }, h('span', { class: 'ico', text: '🎼' }),
       h('span', { class: 'grow tapable', click: () => detail(root, c.id, home) }, h('b', { text: c.name }), h('small', { text: [day(c.date), c.place, c.items.length + (c.items.length === 1 ? ' obra' : ' obras')].filter(Boolean).join(' · ') })),
       h('button', { class: 'main', disabled: !c.items.length, click: () => play(root, c.id, 0, 1, home) }, 'Tocar'),
-      h('button', { class: 'flat', 'aria-label': 'Opciones del concierto', click: () => menu(c, root, home) }, '⋯')));
+      h('button', { class: 'more', 'aria-label': 'Opciones del concierto', click: () => menu(c, root, home) }, 'Más')));
   });
-  if (!rows.firstChild) rows.appendChild(h('p', { class: 'empty', text: 'Todavía no hay conciertos.' }));
+  if (!rows.firstChild) rows.appendChild(h('p', { class: 'empty', text: 'Todavía no hay conciertos. Pulsa «Concierto nuevo» para preparar uno.' }));
 }
 
 export function play(root, id, index, page, home) {
@@ -54,13 +54,15 @@ function detail(root, id, home) {
   clear(root).appendChild(h('div', { class: 'screen col' },
     h('div', { class: 'head' }, h('button', { click: home }, '‹ Conciertos'), h('h1', { class: 'grow', text: c.name })),
     h('p', { class: 'sub', text: [day(c.date), c.place].filter(Boolean).join(' · ') || 'Sin fecha ni lugar' }),
-    h('div', { class: 'tools' }, h('button', { class: 'main', disabled: !c.items.length, click: () => play(root, id, 0, 1, again) }, '▶ Modo concierto'),
-      h('button', { click: () => picker(id, again) }, 'Añadir obras'), h('button', { click: () => edit(c, again) }, 'Editar datos')), rows));
+    h('div', { class: 'tools' }, h('button', { class: 'main', disabled: !c.items.length, click: () => play(root, id, 0, 1, again) }, '▶ Tocar el concierto'),
+      h('button', { click: () => picker(id, again) }, 'Añadir obras'), h('button', { click: () => edit(c, again) }, 'Cambiar nombre o fecha')), rows));
   c.items.forEach((docId, i) => {
     const d = lib.docs[docId], grip = h('span', { class: 'grip', text: '≡' });
+    const quitar = () => confirmar('Quitar del concierto', '«' + (d ? d.name : 'Partitura borrada') + '» sale de este concierto. La partitura no se borra.', 'Quitar')
+      .then((y) => (y ? change('concerts', id, { items: c.items.filter((x, j) => j !== i) }).then(again) : null)).catch(oops);
     const row = h('div', { class: 'item' }, grip, h('span', { class: 'num', text: String(i + 1) }),
       h('span', { class: 'grow tapable', click: () => play(root, id, i, 1, again) }, h('b', { text: d ? d.name : 'Partitura borrada' }), h('small', { text: d ? d.composer || '' : '' })),
-      h('button', { class: 'flat', 'aria-label': 'Quitar del concierto', click: () => change('concerts', id, { items: c.items.filter((x, j) => j !== i) }).then(again, oops) }, '✕'));
+      h('button', { class: 'more', 'aria-label': 'Quitar del concierto', click: quitar }, 'Quitar'));
     sortable(grip, row, rows, i, c.items.length, (to) => {
       const l = c.items.slice();
       l.splice(to, 0, l.splice(i, 1)[0]);

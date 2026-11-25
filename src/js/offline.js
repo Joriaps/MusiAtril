@@ -21,9 +21,10 @@ function set(st, text) {
   state = { state: st, text };
   paint();
   if (st === 'error') toast(text, true);
-  if (st === 'update') toast('Hay una versión nueva: «Copias y opciones» › Actualizar ahora.', true);
+  if (st === 'update') toast('Hay una versión nueva. Ve a «Opciones» y pulsa «Actualizar ahora».', true);
   if (text.indexOf('Lista: ya') === 0) toast(text, true);
 }
+export function updateReady() { return state.state === 'update'; }
 
 export function watchOffline() {
   if (__WEB__) { watchWorker(); return; }

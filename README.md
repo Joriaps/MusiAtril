@@ -25,9 +25,9 @@ Lector de partituras en PDF para iPad. Todo vive en el iPad: sin cuentas y sin s
 
 En iOS 15 y posteriores AppCache ya no funciona de forma fiable, así que la versión web guarda la app con un **service worker**, que solo funciona con HTTPS: por eso se publica en GitHub Pages y no desde el PC. Cambios respecto a la local:
 
-- Las partituras entran con **«Añadir desde el iPad»**, que abre Archivos (Descargas, iCloud Drive, Google Drive si su app está instalada…). Se pueden elegir varias a la vez.
+- Las partituras entran con **«＋ Añadir partituras»**, que abre Archivos (Descargas, iCloud Drive, Google Drive si su app está instalada…). Se pueden elegir varias a la vez.
 - No hay «Importar desde el PC» ni copias al PC. **«Guardar copia en el iPad»** prepara la copia (sin PDFs) y la guarda en Archivos con la hoja de Compartir; «Abrir archivo de copia» la recupera.
-- Las actualizaciones llegan solas al abrir la app con conexión: aparece **«Actualizar ahora»** en «Copias y opciones».
+- Las actualizaciones llegan solas al abrir la app con conexión: aparece **«Actualizar ahora»** arriba en la biblioteca y en «Opciones».
 
 ### Publicar (una vez)
 
@@ -48,7 +48,7 @@ Usa siempre el icono. Los datos viven en el iPad: el repositorio público solo c
 ### Pasar partituras
 
 1. En el iPad, descarga los PDFs de Drive (en Safari: abrir el PDF › Descargar, o Compartir › Guardar en Archivos).
-2. En Atril: **«Añadir desde el iPad»** › Explorar › Descargas, y elige las que quieras.
+2. En Atril: **«＋ Añadir partituras»** › Explorar › Descargas, y elige las que quieras.
 
 Si la app de Google Drive está instalada, también aparece en Archivos y se puede elegir directamente de ahí. Los PDFs idénticos se detectan y no se repiten.
 
@@ -56,7 +56,7 @@ Si la app de Google Drive está instalada, también aparece en Archivos y se pue
 
 1. Cambia lo que haga falta, `npm run build:web` y, si quieres, `npm run test:web`.
 2. En GitHub Desktop: commit y **Push origin**.
-3. En el iPad, abre Atril con conexión, ve a «Copias y opciones» y pulsa **«Actualizar ahora»**. GitHub puede tardar hasta 10 minutos en servir la versión nueva.
+3. En el iPad, abre Atril con conexión, ve a «Opciones» y pulsa **«Actualizar ahora»**. GitHub puede tardar hasta 10 minutos en servir la versión nueva.
 
 No cambies el nombre del repositorio: el icono dejaría de recibir actualizaciones.
 
@@ -106,13 +106,16 @@ Los datos van en IndexedDB, aparte de AppCache, y la actualización no los toca.
 
 ## Uso
 
-- **Lector:** tercio izquierdo, atrás; derecho, adelante; centro, barra. También deslizando y con pedal (flechas, AvPág/RePág, espacio).
-- **Vista:** página entera, ajustada al ancho (cada toque baja una pantalla) o dos páginas en horizontal.
-- **Anotar:** lápiz (6 colores, 4 grosores), resaltador (4 colores, 3 grosores), texto (4 tamaños), goma, deshacer y rehacer. Se guardan aparte del PDF.
-- **Enlazar lápiz:** se toca 5 veces con la punta y la app aprende el tamaño del contacto para ignorar la palma. En un iPad Pro reconoce el Apple Pencil: entonces solo escribe el lápiz y el dedo pasa página.
-- **Ajustes:** brillo, contraste, blanquear fondo, grises, invertir, girar, enderezar y recortar, para toda la partitura o una página.
-- **Biblioteca:** carpetas, etiquetas, búsqueda sin tildes, orden y selección múltiple. Borrar una carpeta no borra sus partituras.
-- **Conciertos:** se ordenan arrastrando por ≡. El modo concierto bloquea la edición y pasa solo a la obra siguiente.
+La interfaz está pensada para alguien a quien la informática le pone nervioso: letra de 20 px, botones de 56 px, palabras en vez de símbolos, pocas opciones a la vista y lo técnico plegado. La pestaña **Ayuda** lo explica con frases cortas.
+
+- **Lector:** tercio izquierdo, atrás; derecho, adelante; centro, barra. También deslizando y con pedal (flechas, AvPág/RePág, espacio). Las tres primeras veces enseña dónde tocar. Arriba: «‹ Volver», «✎ Anotar», «Ir a página» y «Más».
+- **Más (en el lector):** «Mejorar la imagen», «Cambiar la vista» (página entera, al ancho o dos páginas en horizontal) y «Modo noche».
+- **Anotar:** lápiz (6 colores, 4 grosores), resaltador (4 colores, 3 grosores), texto (4 tamaños), goma, «Deshacer» y «Rehacer». Se guardan aparte del PDF.
+- **Enlazar lápiz** (en Opciones): se toca 5 veces con la punta y la app aprende el tamaño del contacto para ignorar la palma. En un iPad Pro reconoce el Apple Pencil: entonces solo escribe el lápiz y el dedo pasa página.
+- **Mejorar la imagen:** brillo, contraste, fondo más blanco, blanco y negro, invertir colores, girar, enderezar y recortar, para toda la partitura o una página.
+- **Biblioteca:** carpetas, etiquetas, búsqueda sin tildes, orden y selección múltiple. Cada partitura tiene un botón «Más». Borrar una carpeta no borra sus partituras. Si hay versión nueva o hace un mes que no hay copia, lo avisa arriba.
+- **Conciertos:** se ordenan arrastrando por ≡. «Tocar el concierto» bloquea la edición y pasa solo a la obra siguiente. «Quitar» pregunta antes de sacar una obra.
+- **Opciones:** a la vista, la copia de seguridad, el lápiz y el estado de la app. «Mostrar más opciones» abre la copia como texto, el espacio y el diagnóstico.
 
 ## Copias de seguridad
 
@@ -143,7 +146,7 @@ Una VPN o una máquina virtual pueden hacer que se detecte la IP equivocada: cor
 ## Qué probar en el iPad
 
 1. Instalar y abrir en modo avión (apartado «Instalar»).
-2. Copias y opciones › **Diagnóstico**, sin tocar nada. Haz una captura.
+2. Opciones › Mostrar más opciones › **Diagnóstico**, sin tocar nada. Haz una captura.
 3. Importar unas pocas partituras reales, cancelar a la mitad y repetir.
 4. Pasar páginas con toques y con el pedal; girar el iPad.
 5. Blanquear y enderezar un escaneo malo; recortarlo después de anotar.

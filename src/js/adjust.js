@@ -57,12 +57,12 @@ export function adjustPanel(view, o) {
       h('span', { class: 'grow' }), h('button', { class: 'main', click: o.close }, 'Listo')));
     box.appendChild(slider('Brillo', 'b', -60, 60, 5));
     box.appendChild(slider('Contraste', 'c', -60, 100, 5));
-    box.appendChild(slider('Blanquear fondo', 'wh', 0, 100, 5));
+    box.appendChild(slider('Fondo más blanco', 'wh', 0, 100, 5));
     box.appendChild(slider('Enderezar', 'skew', -5, 5, 0.1, '°'));
-    box.appendChild(h('div', { class: 'tools' }, toggle('Grises', 'g'), toggle('Invertir', 'i'),
+    box.appendChild(h('div', { class: 'tools' }, toggle('Blanco y negro', 'g'), toggle('Invertir colores', 'i'),
       h('button', { click: () => rotate(-90) }, '⟲ 90°'), h('button', { click: () => rotate(90) }, '⟳ 90°'),
       h('button', { click: startCrop }, 'Recortar márgenes'),
-      h('button', { click: () => { cur = Object.assign({}, DEFAULTS); store().then(() => { draw(); o.redraw(); }); } }, 'Quitar ajustes')));
+      h('button', { click: () => { cur = Object.assign({}, DEFAULTS); store().then(() => { draw(); o.redraw(); }); } }, 'Volver al original')));
   }
   // Al girar, el recorte gira con la página.
   function rotate(d) {

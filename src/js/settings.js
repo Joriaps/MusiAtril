@@ -9,27 +9,38 @@ import { confirmar, elegir, modal, oops, pedir, progreso, toast } from './ui.js'
 import { runDiagnostics } from './diag.js';
 import { offlineCard } from './offline.js';
 
+// «Más opciones» sigue abierto al volver a esta pestaña en la misma sesión.
+let showMore = false;
+
 export function settingsTab(body, root, home) {
   const box = h('div', { class: 'scroll fillrows settings' });
   body.appendChild(box);
-  const sec = (t, ...k) => box.appendChild(h('div', { class: 'sec' }, h('h2', { text: t }), ...k));
+  const more = h('div', { class: 'moreopts' + (showMore ? '' : ' hidden') });
+  const secIn = (to) => (t, ...k) => to.appendChild(h('div', { class: 'sec' }, h('h2', { text: t }), ...k));
+  const sec = secIn(box), secMore = secIn(more);
   const btns = (...k) => h('div', { class: 'tools' }, ...k);
 
-  const last = h('p', { class: 'sub', text: lib.prefs.backup ? 'Última copia: ' + new Date(lib.prefs.backup).toLocaleString('es-ES') : 'Todavía no has hecho ninguna copia.' });
+  // A la vista: copia de seguridad, lápiz y estado de la app. Lo técnico, en «Más opciones».
+  const last = h('p', { class: 'sub', text: lib.prefs.backup ? 'Última copia: ' + new Date(lib.prefs.backup).toLocaleString('es-ES') : 'Todavía no has guardado ninguna copia.' });
   if (__WEB__) sec('Copia de seguridad',
-    h('p', { text: 'iOS puede borrar los datos si el iPad se queda sin espacio. Guarda una copia en Archivos de vez en cuando y siempre antes de un concierto.' }),
-    h('p', { text: 'La copia no lleva los PDFs: guárdalos tú (por ejemplo, en Drive). Al volver a añadirlos se unen solos a sus anotaciones.' }),
+    h('p', { text: 'Guarda una copia de tus carpetas, conciertos y anotaciones de vez en cuando, y siempre antes de un concierto.' }),
+    h('p', { text: 'Las partituras no van en la copia: no las borres de Drive. Si algún día hace falta, al volver a añadirlas recuperan solas sus anotaciones.' }),
     last,
-    btns(h('button', { class: 'main', click: () => saveFile(home) }, 'Guardar copia en el iPad'), fileButton()),
-    btns(h('button', { click: exportText }, 'Copiar como texto'), h('button', { click: importText }, 'Pegar una copia')));
+    btns(h('button', { class: 'main', click: () => saveFile(home) }, 'Guardar copia en el iPad'), fileButton()));
   else sec('Copia de seguridad',
     h('p', { text: 'iOS puede borrar los datos si el iPad se queda sin espacio. Haz una copia en el PC de vez en cuando y siempre antes de un concierto.' }),
     last,
-    btns(h('button', { class: 'main', click: () => send(true) }, 'Copia completa al PC (con PDFs)'), h('button', { click: () => send(false) }, 'Copia al PC sin PDFs'), h('button', { click: recover }, 'Recuperar del PC')),
-    btns(h('button', { click: exportText }, 'Copiar como texto'), h('button', { click: importText }, 'Pegar una copia'), fileButton()));
+    btns(h('button', { class: 'main', click: () => send(true) }, 'Copia completa al PC (con PDFs)'), h('button', { click: () => send(false) }, 'Copia al PC sin PDFs'), h('button', { click: recover }, 'Recuperar del PC')));
 
+  const toggle = h('button', { click: () => { showMore = !showMore; more.classList.toggle('hidden', !showMore); toggle.textContent = label(); } });
+  const label = () => (showMore ? 'Ocultar más opciones ▴' : 'Mostrar más opciones ▾');
+  toggle.textContent = label();
+
+  secMore('Copia como texto',
+    h('p', { text: 'Para pegarla en Notas o en un correo. No lleva las partituras.' }),
+    btns(h('button', { click: exportText }, 'Copiar como texto'), h('button', { click: importText }, 'Pegar una copia'), __WEB__ ? null : fileButton()));
   const space = h('div', null);
-  sec('Espacio', space);
+  secMore('Espacio', space);
   usage().then((u) => {
     const n = list('docs').length, lost = list('docs').filter((d) => !d.blob).length;
     space.appendChild(h('p', { text: n + (n === 1 ? ' partitura' : ' partituras') + ' · PDFs ' + mb(u.pdf) + ' · anotaciones ' + mb(u.notes) + (u.partial ? ' · importaciones a medias ' + mb(u.partial) : '') }));
@@ -50,7 +61,10 @@ export function settingsTab(body, root, home) {
   const pen = { finger: 'Se escribe con el dedo o con cualquier lápiz.', cap: 'Lápiz de contacto enlazado: se ignora la palma.', stylus: 'Apple Pencil enlazado: solo escribe el lápiz.' };
   sec('Lápiz', h('p', { text: pen[lib.prefs.hand] || pen.finger }), btns(h('button', { click: () => pairPen(lib.prefs, (hand, r) => { lib.prefs.radius = r; pref('hand', hand).then(home, oops); }) }, 'Enlazar un lápiz')));
 
-  sec('App', offlineCard(), h('p', { class: 'sub', text: 'Versión ' + __VERSION__ + ' · PDF.js ' + __PDFJS__ + (navigator.standalone ? '' : ' · abierta en el navegador: usa siempre el icono') }),
+  sec('Atril', offlineCard(), h('p', { class: 'sub', text: 'Versión ' + __VERSION__ + (navigator.standalone ? '' : ' · abierta en el navegador: usa siempre el icono') }));
+  box.appendChild(btns(toggle));
+  box.appendChild(more);
+  secMore('Comprobaciones', h('p', { class: 'sub', text: 'PDF.js ' + __PDFJS__ }),
     btns(h('button', { click: () => diagnostics(root, home) }, 'Diagnóstico'), h('button', { click: () => openViewerDemo('prueba/limpio.pdf', 'Prueba: limpio', home) }, 'Guardar PDF de prueba limpio'), h('button', { click: () => openViewerDemo('prueba/mal-escaneo.pdf', 'Prueba: mal escaneo', home) }, 'Guardar PDF de prueba mal escaneado')));
 
   // --- copias
