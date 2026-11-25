@@ -1,0 +1,10 @@
+{
+  "puerto": 8377,
+  "direccion": "192.168.1.39",
+  "minutosInactivo": 30,
+  "carpeta": "./partituras",
+  "copias": "./copias",
+  "maxPdfMB": 300,
+  "maxCopiaMB": 20,
+  "maxCopiasMB": 20000
+}
