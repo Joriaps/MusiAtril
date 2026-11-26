@@ -61,6 +61,32 @@ try {
   // --- instalar
   await page.goto(URL0, { waitUntil: 'networkidle0' });
   await text('Todavía no hay partituras');
+
+  // --- texto con una fuente que el PDF no incluye (títulos y letras de muchas partituras)
+  const sinFuente = () => {
+    const content = '2 w 50 600 m 550 600 l S 50 620 m 550 620 l S 50 640 m 550 640 l S\nBT /F1 40 Tf 60 700 Td (Allegro moderato) Tj ET';
+    const objs = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>', `<< /Length ${content.length} >>\nstream\n${content}\nendstream`];
+    let out = '%PDF-1.4\n'; const offs = [];
+    objs.forEach((o, i) => { offs.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+    const x = out.length;
+    out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offs.map((o) => String(o).padStart(10, '0') + ' 00000 n \n').join('') + `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${x}\n%%EOF\n`;
+    return [...Buffer.from(out, 'latin1')];
+  };
+  const ink = await page.evaluate(async (data) => {
+    // Mismas opciones que engine.js (disableFontFace incluido).
+    const doc = await window.pdfjsLib.getDocument({ data: new Uint8Array(data), isEvalSupported: false, disableFontFace: true, enableXfa: false, verbosity: 0 }).promise;
+    const pg = await doc.getPage(1), vp = pg.getViewport({ scale: 1 }), c = document.createElement('canvas');
+    c.width = vp.width; c.height = vp.height;
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+    await pg.render({ canvasContext: x, viewport: vp }).promise;
+    const d = x.getImageData(0, 50, c.width, 70).data; let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] < 128) n++;
+    await doc.destroy();
+    return n;
+  }, sinFuente());
+  check(ink > 500, 'se ve el texto con una fuente que el PDF no incluye (' + ink + ' píxeles)');
   check(await has('elígelas en Archivos'), 'biblioteca vacía explica cómo añadir partituras');
   check(!(await has('Importar desde el PC')), 'sin «Importar desde el PC»');
   check(await page.evaluate(() => !!document.querySelector('label.btn.main input[type=file][multiple]') && document.querySelector('label.btn.main').textContent.includes('Añadir partituras')), '«＋ Añadir partituras» es el botón principal y admite varios PDF');

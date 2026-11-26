@@ -19,6 +19,10 @@ export function patchMain(c) {
   c = sub(c, 'new Function("");\n    return true;', 'return false;', 1, 'isEvalSupported');
   c = sub(c, 'worker = eval("require")(_getWorkerSrc());', 'throw new Error("no disponible");', 1, 'eval require');
   c = sub(c, 'new Function("c", "size", js)', 'function () { throw new Error("eval desactivado"); }', 1, 'glifos (CVE-2024-4367)');
+  // Con disableFontFace, una fuente que el PDF no incluye no tiene contornos y su texto no se dibujaba
+  // (títulos y letras de muchas partituras). Solo esas las pinta el navegador con una fuente parecida;
+  // las incluidas siguen yendo como trazos.
+  c = sub(c, 'this.disableFontFace = disableFontFace === true;\n    this.ignoreErrors', 'this.disableFontFace = disableFontFace === true && !translatedData.missingFile;\n    this.ignoreErrors', 1, 'fuentes no incluidas');
   return c;
 }
 
