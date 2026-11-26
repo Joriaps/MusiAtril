@@ -33,7 +33,9 @@ export function helpTab(body, toLibrary) {
     'Cuando acabes, pulsa «Listo». Se guarda solo.');
   sec('Conciertos',
     'En «Conciertos» puedes juntar las obras de un concierto en su orden.',
-    'Pulsa «Tocar» y, al terminar cada obra, Atril pasa sola a la siguiente.');
+    'Pulsa «Tocar» y, al terminar cada obra, Atril pasa sola a la siguiente.',
+    'Para empezar por una obra del medio, entra en el concierto y pulsa «Empezar aquí» en esa obra.',
+    'Mientras tocas, toca en el centro de la página: «Otra obra» salta a otra obra y «Ir a página» a una página de la obra que estás tocando.');
   sec('Copia de seguridad',
     'Si el iPad se queda sin espacio, puede borrar los datos de Atril. Por eso conviene guardar una copia de vez en cuando y siempre antes de un concierto.',
     __WEB__ ? 'Ve a «Opciones» y pulsa «Guardar copia en el iPad». Guarda carpetas, conciertos y anotaciones, pero no los PDFs: no los borres de Drive.'

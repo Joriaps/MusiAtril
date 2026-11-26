@@ -31,7 +31,8 @@ export function openReader(root, o) {
     clear(bar);
     bar.appendChild(h('button', { click: exit }, '‹ Volver'));
     bar.appendChild(info);
-    if (o.concert) { bar.appendChild(h('button', { click: pickWork }, 'Obras')); return; }
+    // En concierto no se edita, pero sí se salta a otra obra o a una página de la obra actual.
+    if (o.concert) { bar.appendChild(h('button', { click: pickWork }, 'Otra obra')); bar.appendChild(h('button', { click: pickPage }, 'Ir a página')); return; }
     bar.appendChild(h('button', { class: annot ? 'on' : '', click: toggleAnnot }, '✎ Anotar'));
     bar.appendChild(h('button', { click: pickPage }, 'Ir a página'));
     bar.appendChild(h('button', { click: moreMenu }, 'Más'));

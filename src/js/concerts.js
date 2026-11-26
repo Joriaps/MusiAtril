@@ -60,8 +60,11 @@ function detail(root, id, home) {
     const d = lib.docs[docId], grip = h('span', { class: 'grip', text: '≡' });
     const quitar = () => confirmar('Quitar del concierto', '«' + (d ? d.name : 'Partitura borrada') + '» sale de este concierto. La partitura no se borra.', 'Quitar')
       .then((y) => (y ? change('concerts', id, { items: c.items.filter((x, j) => j !== i) }).then(again) : null)).catch(oops);
+    // play() salta las obras borradas: la posición se cuenta solo entre las que existen.
+    const from = () => play(root, id, c.items.slice(0, i).filter((x) => lib.docs[x]).length, 1, again);
     const row = h('div', { class: 'item' }, grip, h('span', { class: 'num', text: String(i + 1) }),
-      h('span', { class: 'grow tapable', click: () => play(root, id, i, 1, again) }, h('b', { text: d ? d.name : 'Partitura borrada' }), h('small', { text: d ? d.composer || '' : '' })),
+      h('span', { class: 'grow tapable', click: () => { if (d) from(); } }, h('b', { text: d ? d.name : 'Partitura borrada' }), h('small', { text: d ? d.composer || '' : '' })),
+      h('button', { class: 'more', disabled: !d, click: from }, '▶ Empezar aquí'),
       h('button', { class: 'more', 'aria-label': 'Quitar del concierto', click: quitar }, 'Quitar'));
     sortable(grip, row, rows, i, c.items.length, (to) => {
       const l = c.items.slice();

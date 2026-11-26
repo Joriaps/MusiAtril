@@ -183,8 +183,10 @@ try {
   check(N.length === 4 && N.map((n) => n.t).join() === 'pen,pen,mark,text', 'lápiz, resaltador y texto guardados');
   check(N[0].c !== N[1].c && N[0].w !== N[1].w, 'colores y tamaños distintos');
   await shot('anotaciones');
-  await click('↶', '.abar button'); check((await notes()).length === 3, 'deshacer'); await click('↷', '.abar button'); check((await notes()).length === 4, 'rehacer');
-  await click('Goma', '.abar button'); await drag([[400, 350], [400, 450]]); check((await notes()).length === 3, 'la goma borra el trazo tocado'); await click('↶', '.abar button');
+  // Guardar en IndexedDB es asíncrono: con el equipo cargado tarda más de lo que tarda la prueba en mirar.
+  const notesAre = async (n) => { for (let i = 0; i < 50; i++) { if ((await notes()).length === n) return true; await sleep(100); } return false; };
+  await click('↶', '.abar button'); check(await notesAre(3), 'deshacer'); await click('↷', '.abar button'); check(await notesAre(4), 'rehacer');
+  await click('Goma', '.abar button'); await drag([[400, 350], [400, 450]]); check(await notesAre(3), 'la goma borra el trazo tocado'); await click('↶', '.abar button'); await notesAre(4);
   await tap(700); check(await page.evaluate(() => document.querySelector('.bar .grow').textContent.includes('2/5')), 'anotando, los toques no pasan página');
   await click('Listo', '.abar button'); await sleep(5000);
   // Centro de la tinta roja proyectado a la página: debe ser el mismo antes y después.
@@ -231,11 +233,17 @@ try {
   await drag([gp[0], [gp[0][0], gp[1][1]], [gp[2][0], gp[2][1] + 5]]); await sleep(300);
   const i1 = await items(); check(i0.length === 3 && i1.join() === [i0[1], i0[2], i0[0]].join(), 'reordenar arrastrando'); await shot('concierto');
   await click('Tocar el concierto'); await page.waitForSelector('.viewer.concert'); await at(1);
-  check(await page.evaluate(() => ![...document.querySelectorAll('button')].some((b) => /Anotar|Ir a página|^Más$/.test(b.textContent))), 'modo concierto sin edición');
+  check(await page.evaluate(() => ![...document.querySelectorAll('button')].some((b) => /Anotar|^Más$/.test(b.textContent))), 'modo concierto sin edición');
   for (let i = 0; i < 30; i++) { if (await page.evaluate(() => document.querySelector('.bar .grow').textContent.startsWith('2 de 3'))) break; await tap(720); await sleep(350); }
   await at(1); check(await page.evaluate(() => document.querySelector('.bar .grow').textContent.startsWith('2 de 3')), 'al acabar pasa a la siguiente obra');
   await tap(60); await sleep(800); check(await page.evaluate(() => document.querySelector('.bar .grow').textContent.startsWith('1 de 3')), 'y hacia atrás vuelve a la anterior');
-  await page.touchscreen.tap(384, 500); await sleep(200); await click('‹ Volver'); await text('Tocar el concierto'); await click('‹ Conciertos');
+  await page.touchscreen.tap(384, 500); await sleep(200); await click('‹ Volver'); await text('Tocar el concierto');
+  // Empezar por una obra intermedia e ir a una página de esa obra.
+  await page.evaluate(() => [...document.querySelectorAll('.item')][1].querySelector('button').click()); await page.waitForSelector('.viewer.concert'); await at(1);
+  check(await page.evaluate(() => document.querySelector('.bar .grow').textContent.startsWith('2 de 3')), '«Empezar aquí» abre el concierto en esa obra');
+  await click('Ir a página', '.bar button'); await click('Página 3', '.sheet button'); await at(3);
+  check(await page.evaluate(() => document.querySelector('.bar .grow').textContent.startsWith('2 de 3')), 'en concierto, «Ir a página» va a una página de la obra actual');
+  await click('‹ Volver'); await text('Tocar el concierto'); await click('‹ Conciertos');
 
   // --- copias
   const moreOpts = async () => { if (await page.evaluate(() => !!document.querySelector('.moreopts.hidden'))) await click('Mostrar más opciones'); };
@@ -280,7 +288,10 @@ try {
   await click('‹ Volver');
   // --- sin servidor
   srv.kill(); await sleep(400);
-  await click('Partituras', '.tab'); await click('Mal escaneo', '.item .tapable'); await at(1).catch(() => at(2)); check(true, 'con el servidor apagado se abre y se lee');
+  // Se abre en la página donde se dejó (en el concierto se fue a la 3): vale cualquiera, lo que importa es que se dibuje.
+  await click('Partituras', '.tab'); await click('Mal escaneo', '.item .tapable');
+  await page.waitForFunction(() => document.querySelectorAll('.spread').length === 1 && document.querySelector('.spread canvas') && !document.querySelector('.msg').textContent, { timeout: 60000 });
+  check(true, 'con el servidor apagado se abre y se lee');
   await click('‹ Volver'); await page.waitForSelector('.tabs'); await click('Importar desde el PC'); await text('No encuentro el PC'); check(true, 'y al importar lo explica');
   check(!ext.length, 'ninguna petición fuera del servidor ' + ext.join(' '));
   const real = errs.filter((e) => !/favicon|status of 40|ERR_CONNECTION/.test(e));
