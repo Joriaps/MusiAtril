@@ -11,7 +11,9 @@ import { toast, oops, modalOpen, elegir, acciones } from './ui.js';
 // o: {list: [idDoc], index, concert, title, page, onExit}
 export function openReader(root, o) {
   let index = o.index || 0, docId = o.list[index], pdf = null, page = 1, token = 0, dead = false, busy = false;
-  let shown = null, next = null, offset = 0, annot = false, panel = null, layers = [], crop = false, wantEnd = false, navTimer = 0;
+  let shown = null, next = null, prev = null, offset = 0, annot = false, panel = null, layers = [], crop = false, wantEnd = false, navTimer = 0;
+  // Zoom con dos dedos: escala y desplazamiento de la página mostrada. Se vuelve a 1 al cambiar de página.
+  let zoom = 1, panX = 0, panY = 0, pinch = null, barTimer = 0;
   let tool = Object.assign({ t: 'pen', pen: 0, mark: 0, pw: 1, mw: 1, tw: 1, ew: 1 }, lib.prefs.pen || {});
 
   const stage = h('div', { class: 'stage' }), msg = h('div', { class: 'msg' }), info = h('span', { class: 'grow' });
@@ -34,6 +36,16 @@ export function openReader(root, o) {
     bar.appendChild(h('button', { click: pickPage }, 'Ir a página'));
     bar.appendChild(h('button', { click: moreMenu }, 'Más'));
   }
+  // La barra tapa el principio de la página: se esconde sola a los 5 s y al pasar página.
+  function hideBarLater(ms) {
+    clearTimeout(barTimer);
+    barTimer = setTimeout(() => {
+      if (dead || annot || panel || crop || !pdf) return;
+      if (modalOpen()) { hideBarLater(2000); return; }
+      bar.classList.add('hidden');
+    }, ms || 5000);
+  }
+  function hideBar() { clearTimeout(barTimer); if (!annot && !panel && !crop) bar.classList.add('hidden'); }
   function moreMenu() {
     acciones('Más opciones', [
       { text: 'Mejorar la imagen (brillo, recortar, girar)', fn: openAdjust },
@@ -138,13 +150,12 @@ export function openReader(root, o) {
     label();
     save();
     msg.textContent = '';
-    if (!refresh && next && next.key === specKey(page)) {
-      const n = next; next = null;
-      place(n);
-      ahead(t);
-      return;
-    }
+    // La siguiente (y en la web también la anterior) ya están dibujadas: el cambio es inmediato.
+    const k = specKey(page);
+    if (!refresh && next && next.key === k) { const n = next; next = null; place(n); ahead(t); return; }
+    if (!refresh && prev && prev.key === k) { const n = prev; prev = null; place(n); ahead(t); return; }
     dropSpread(next); next = null;
+    dropSpread(prev); prev = null;
     const wait = setTimeout(() => { if (wanted()) msg.textContent = 'Cargando…'; }, 250);
     build(page, wanted).then((s) => {
       clearTimeout(wait);
@@ -163,28 +174,53 @@ export function openReader(root, o) {
     const old = shown;
     shown = s;
     stage.appendChild(s.el);
-    dropSpread(old);
+    if (old && old !== s) keep(old);
     layers = s.slots.map((slot) => { const l = new NoteLayer(slot, docId, currentTool, refreshUndo, oops); return l; });
     if (annot) s.slots.forEach((x) => redraw(x, x.notes));
     const room = overflow();
     if (wantEnd) { offset = room; wantEnd = false; }
     offset = Math.max(0, Math.min(room, offset));
+    zoom = 1; panX = panY = 0;
     scroll();
     refreshUndo();
     if (panel) panel.refresh();
+  }
+  // La página que se deja no se tira si es la de al lado: volver a ella es inmediato.
+  function keep(old) {
+    if (old.el.parentNode) old.el.parentNode.removeChild(old.el);
+    if (old.key === specKey(page + step())) { if (next !== old) dropSpread(next); next = old; return; }
+    if (__WEB__ && old.key === specKey(page - step())) { if (prev !== old) dropSpread(prev); prev = old; return; }
+    dropSpread(old);
   }
   function overflow() { return shown && lib.prefs.fit === 'width' && shown.slots[0] ? Math.max(0, shown.slots[0].geo.cssH - size()[1]) : 0; }
   function scroll() {
     if (!shown) return;
     const room = overflow(), s = size(), hh = shown.slots[0] ? shown.slots[0].geo.cssH : 0;
-    shown.el.style.top = room ? '0' : Math.max(0, Math.floor((s[1] - hh) / 2)) + 'px';
-    shown.el.style.webkitTransform = shown.el.style.transform = 'translate3d(0,' + -Math.round(offset) + 'px,0)';
+    const top = room ? 0 : Math.max(0, Math.floor((s[1] - hh) / 2));
+    shown.el.style.top = top + 'px';
+    if (zoom <= 1.02) { zoom = 1; panX = panY = 0; } else {
+      // Con zoom, la página no puede despegarse de los bordes; si cabe en alto, se centra.
+      const base = top - offset, ch = zoom * hh;
+      panX = Math.min(0, Math.max(s[0] - zoom * s[0], panX));
+      panY = ch >= s[1] ? Math.min(-base, Math.max(s[1] - ch - base, panY)) : (s[1] - ch) / 2 - base;
+    }
+    shown.el.style.webkitTransform = shown.el.style.transform = 'translate3d(' + Math.round(panX) + 'px,' + Math.round(panY - offset) + 'px,0)' + (zoom > 1 ? ' scale(' + zoom + ')' : '');
   }
   function ahead(t) {
-    const n = page + step();
-    if (crop || n > pdf.pages || (next && next.key === specKey(n))) return;
-    dropSpread(next); next = null;
-    build(n, () => t === token && !dead).then((s) => { if (s) next = s; }, () => null);
+    if (crop) return;
+    const want = () => t === token && !dead, n = page + step(), b = page - step();
+    let p = Promise.resolve();
+    if (n <= pdf.pages && !(next && next.key === specKey(n))) {
+      p = p.then(() => { dropSpread(next); next = null; return build(n, want).then((s) => { if (s) next = s; }, () => null); });
+    }
+    // En la web (iPad con más memoria) también se prepara la anterior.
+    if (__WEB__ && b >= 1) {
+      p.then(() => {
+        if (!want() || (prev && prev.key === specKey(b))) return null;
+        dropSpread(prev); prev = null;
+        return build(b, want).then((s) => { if (s) prev = s; }, () => null);
+      });
+    }
   }
   // iOS 10 reinicia la app al volver a ella: se guarda la posición en cada cambio.
   let saved = '';
@@ -202,15 +238,16 @@ export function openReader(root, o) {
     if (d > 0 && offset < room - 2) { offset = Math.min(room, offset + hh); scroll(); return; }
     if (d < 0 && offset > 2) { offset = Math.max(0, offset - hh); scroll(); return; }
     const p = page + d * step();
+    // En la última y en la primera página no se avisa: simplemente no pasa nada.
     if (p > pdf.pages) {
       if (o.concert && index < o.list.length - 1) goWork(index + 1, 1);
-      else toast(o.concert ? 'Fin del concierto' : 'Última página');
       return;
     }
     if (p < 1 && page === 1) {
       if (o.concert && index > 0) goWork(index - 1, -1);
       return;
     }
+    hideBar();
     page = Math.max(1, p);
     if (d < 0 && lib.prefs.fit === 'width') { wantEnd = true; offset = 0; } else offset = 0;
     show();
@@ -223,7 +260,7 @@ export function openReader(root, o) {
 
   function load(at) {
     busy = true; token++;
-    dropSpread(next); next = null; layers = [];
+    dropSpread(next); next = null; dropSpread(prev); prev = null; layers = [];
     const old = pdf, mine = docId;
     pdf = null;
     msg.textContent = 'Abriendo…';
@@ -238,11 +275,13 @@ export function openReader(root, o) {
       pdf = p; busy = false; offset = 0;
       page = at === -1 ? p.pages : Math.max(1, Math.min(p.pages, at || d.page || 1));
       show();
+      if (!bar.classList.contains('hidden')) hideBarLater();
     }).catch((e) => {
       busy = false;
       if (dead || mine !== docId) return;
       dropSpread(shown); shown = null;
       msg.textContent = 'No se puede abrir: ' + (e && e.name === 'PasswordException' ? 'el PDF tiene contraseña' : e && e.message || e);
+      clearTimeout(barTimer);
       bar.classList.remove('hidden');
     });
   }
@@ -264,6 +303,7 @@ export function openReader(root, o) {
     bottom.classList.toggle('hidden', !annot);
     view.classList.toggle('annotating', annot);
     bar.classList.toggle('hidden', annot);
+    if (!annot) hideBarLater();
     buildBar(); buildTools();
     fitStage();
     offset = 0;
@@ -277,7 +317,15 @@ export function openReader(root, o) {
     stageH = annot ? bottom.offsetHeight : 0;
   }
   let last = null;
-  function refreshUndo() { if (annot) buildTools(); }
+  // Tras cada trazo solo cambian Deshacer y Rehacer: rehacer toda la barra se comía el toque en un color.
+  let undoBtn = null, redoBtn = null;
+  function refreshUndo() {
+    if (!annot) return;
+    if (!undoBtn || !undoBtn.parentNode) { buildTools(); return; }
+    const a = active();
+    undoBtn.disabled = !(a && a.undoList.length);
+    redoBtn.disabled = !(a && a.redoList.length);
+  }
   function active() { return last && layers.indexOf(last) >= 0 ? last : layers[0]; }
   function buildTools() {
     clear(bottom);
@@ -300,8 +348,8 @@ export function openReader(root, o) {
     });
     bottom.appendChild(h('span', { class: 'sep' }));
     const a = active(), B = (text, ok, fn) => bottom.appendChild(h('button', { disabled: !ok, click: fn }, text));
-    B('↶ Deshacer', a && a.undoList.length, () => active().undo());
-    B('↷ Rehacer', a && a.redoList.length, () => active().redo());
+    undoBtn = B('↶ Deshacer', a && a.undoList.length, () => active().undo());
+    redoBtn = B('↷ Rehacer', a && a.redoList.length, () => active().redo());
     // «Enlazar un lápiz» está en Opciones: aquí solo lo que se usa al escribir.
     bottom.appendChild(h('button', { 'aria-label': 'Página anterior', click: () => go(-1) }, '◀'));
     bottom.appendChild(h('button', { 'aria-label': 'Página siguiente', click: () => go(1) }, '▶'));
@@ -330,6 +378,7 @@ export function openReader(root, o) {
     p.destroy();
     if (crop) { crop = false; show(true); }
     bar.classList.remove('hidden');
+    hideBarLater();
   }
 
   // --- toques. Un único recorrido: toque = página; arrastre horizontal = página; vertical = desplazar.
@@ -344,7 +393,7 @@ export function openReader(root, o) {
   }
   function down(e, id, draws) {
     if (crop) return;
-    g = { id, x: e.clientX, y: e.clientY, off: offset, at: Date.now(), layer: null, moved: false };
+    g = { id, x: e.clientX, y: e.clientY, off: offset, px: panX, py: panY, layer: null, far: false, scrolled: false };
     if (annot && draws) {
       const l = layerAt(e);
       if (l) { g.layer = l; last = l; l.start(e); }
@@ -354,8 +403,11 @@ export function openReader(root, o) {
     if (!g) return;
     if (g.layer) { g.layer.move(e); return; }
     const dx = e.clientX - g.x, dy = e.clientY - g.y;
-    if (Math.abs(dx) > 12 || Math.abs(dy) > 12) g.moved = true;
-    if (overflow() && Math.abs(dy) > 8) { offset = Math.max(0, Math.min(overflow(), g.off - dy)); scroll(); }
+    // El dedo tiembla al pulsar: hasta 40 px sigue siendo un toque.
+    if (Math.abs(dx) > 40 || Math.abs(dy) > 40) g.far = true;
+    // Con zoom, arrastrar mueve la página en vez de pasarla.
+    if (zoom > 1) { if (Math.abs(dx) > 10 || Math.abs(dy) > 10) g.scrolled = true; panX = g.px + dx; panY = g.py + dy; scroll(); return; }
+    if (overflow() && Math.abs(dy) > 8) { offset = Math.max(0, Math.min(overflow(), g.off - dy)); g.scrolled = true; scroll(); }
   }
   function up(e) {
     const s = g;
@@ -363,24 +415,50 @@ export function openReader(root, o) {
     if (!s) return;
     if (s.layer) { s.layer.end(); return; }
     const dx = e.clientX - s.x, dy = e.clientY - s.y;
-    if (s.moved) { if (!annot && Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) go(dx < 0 ? 1 : -1); return; }
+    if (s.scrolled) return;
+    if (s.far) { if (!annot && Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) go(dx < 0 ? 1 : -1); return; }
     // Al anotar, el dedo solo pasa página si está reconocido un Apple Pencil.
     if (annot && lib.prefs.hand !== 'stylus') return;
-    if (Date.now() - s.at > 900) return;
     const x = e.clientX / (view.clientWidth || 1);
     if (x < 1 / 3) go(-1);
     else if (x > 2 / 3) go(1);
-    else if (!annot && !panel) { bar.classList.toggle('hidden'); count.classList.toggle('hidden', false); }
+    else if (!annot && !panel) {
+      if (!bar.classList.toggle('hidden')) hideBarLater();
+      count.classList.toggle('hidden', false);
+    }
   }
   function abort() { if (g && g.layer) g.layer.cancel(); g = null; }
+
+  // --- zoom con dos dedos (de 1 a 4 veces), alrededor del punto entre los dedos.
+  const dist = (a, b) => Math.sqrt(Math.pow(a.clientX - b.clientX, 2) + Math.pow(a.clientY - b.clientY, 2));
+  function startPinch(l) {
+    abort();
+    const r = stage.getBoundingClientRect();
+    pinch = { d: Math.max(10, dist(l[0], l[1])), mx: (l[0].clientX + l[1].clientX) / 2 - r.left, my: (l[0].clientY + l[1].clientY) / 2 - r.top, z: zoom, px: panX, py: panY };
+  }
+  function movePinch(l) {
+    if (!shown) return;
+    const r = stage.getBoundingClientRect(), base = (parseFloat(shown.el.style.top) || 0) - offset;
+    const z = Math.max(1, Math.min(4, pinch.z * dist(l[0], l[1]) / pinch.d));
+    const mx = (l[0].clientX + l[1].clientX) / 2 - r.left, my = (l[0].clientY + l[1].clientY) / 2 - r.top;
+    // El punto de la partitura que estaba entre los dedos sigue entre los dedos.
+    panX = mx - z * (pinch.mx - pinch.px) / pinch.z;
+    panY = my - base - z * (pinch.my - base - pinch.py) / pinch.z;
+    zoom = z;
+    scroll();
+  }
   const find = (l, id) => { for (let i = 0; i < l.length; i++) if (l[i].identifier === id) return l[i]; return null; };
   stage.addEventListener('touchstart', (e) => {
     e.preventDefault();
     lastTouch = Date.now();
     if (document.activeElement && document.activeElement.blur && document.activeElement !== document.body) document.activeElement.blur();
+    // Tras un zoom no se hace nada hasta levantar todos los dedos.
+    if (pinch) return;
     // iOS puede perder el final de un toque (gestos del sistema): no debe bloquear el lector.
     if (g && g.id !== 'm' && !find(e.touches, g.id)) abort();
     const t = e.changedTouches[0], pen = penTouch(t, lib.prefs);
+    // Dos dedos: zoom. Con un lápiz enlazado, el lápiz que llega con la mano apoyada sigue escribiendo.
+    if (e.touches.length >= 2 && !crop && shown && !(annot && pen && lib.prefs.hand !== 'finger')) { startPinch(e.touches); return; }
     if (g) {
       // Con Apple Pencil, la mano apoyada antes no impide escribir.
       if (annot && pen && !g.layer && lib.prefs.hand !== 'finger') { down(t, t.identifier, true); return; }
@@ -389,9 +467,20 @@ export function openReader(root, o) {
     }
     down(t, t.identifier, pen);
   }, { passive: false });
-  stage.addEventListener('touchmove', (e) => { e.preventDefault(); const t = g && find(e.changedTouches, g.id); if (t) moveTo(t); }, { passive: false });
-  stage.addEventListener('touchend', (e) => { e.preventDefault(); lastTouch = Date.now(); const t = g && find(e.changedTouches, g.id); if (t) up(t); }, { passive: false });
-  stage.addEventListener('touchcancel', (e) => { if (g && find(e.changedTouches, g.id)) abort(); });
+  stage.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (pinch) { if (e.touches.length >= 2) movePinch(e.touches); return; }
+    const t = g && find(e.changedTouches, g.id);
+    if (t) moveTo(t);
+  }, { passive: false });
+  stage.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    lastTouch = Date.now();
+    if (pinch) { if (!e.touches.length) pinch = null; return; }
+    const t = g && find(e.changedTouches, g.id);
+    if (t) up(t);
+  }, { passive: false });
+  stage.addEventListener('touchcancel', (e) => { if (pinch && !e.touches.length) pinch = null; if (g && find(e.changedTouches, g.id)) abort(); });
   stage.addEventListener('mousedown', (e) => { if (e.button === 0 && Date.now() - lastTouch > 800) { down(e, 'm', true); e.preventDefault(); } });
   const mm = (e) => { if (g && g.id === 'm') moveTo(e); }, mu = (e) => { if (g && g.id === 'm') up(e); };
   document.addEventListener('mousemove', mm);
@@ -413,20 +502,20 @@ export function openReader(root, o) {
   let timer = 0;
   function onResize() {
     clearTimeout(timer);
-    timer = setTimeout(() => { if (annot) fitStage(); if (shown && specKey(page) !== shown.key) { abort(); offset = 0; show(true); } else scroll(); }, 250);
+    timer = setTimeout(() => { zoom = 1; panX = panY = 0; pinch = null; if (annot) fitStage(); if (shown && specKey(page) !== shown.key) { abort(); offset = 0; show(true); } else scroll(); }, 250);
   }
 
   function exit() {
     if (dead) return;
     closePanel();
     dead = true; token++;
-    clearTimeout(timer);
+    clearTimeout(timer); clearTimeout(barTimer);
     document.removeEventListener('keydown', onKey);
     document.removeEventListener('mousemove', mm);
     document.removeEventListener('mouseup', mu);
     window.removeEventListener('resize', onResize);
-    dropSpread(shown); dropSpread(next);
-    shown = next = null;
+    dropSpread(shown); dropSpread(next); dropSpread(prev);
+    shown = next = prev = null;
     db.del('meta', 'session').catch(() => null);
     if (pdf) pdf.close();
     o.onExit();

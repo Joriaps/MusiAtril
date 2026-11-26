@@ -100,6 +100,38 @@ try {
   check(await has('Mejorar la imagen') && await has('Modo noche'), '«Más» agrupa imagen, vista y modo noche');
   await shot('web-mas');
   await page.evaluate(() => document.querySelector('.modal button[aria-label="Cerrar"]').click());
+  await sleep(300);
+
+  // --- toques, zoom y cambio de página
+  const atP = (n) => page.waitForFunction((n) => { const s = document.querySelectorAll('.spread'); return s.length === 1 && s[0].getAttribute('data-p') === String(n); }, { timeout: 30000 }, n);
+  const tf = () => page.evaluate(() => document.querySelector('.spread').style.transform);
+  const barHidden = () => page.evaluate(() => document.querySelector('.bar').classList.contains('hidden'));
+  const notesN = () => page.evaluate(() => new Promise((ok) => { const r = indexedDB.open('atril'); r.onsuccess = () => { let n = 0; const c = r.result.transaction('notes').objectStore('notes').openCursor(); c.onsuccess = () => { const k = c.result; if (k) { n += k.value.length; k.continue(); } else { r.result.close(); ok(n); } }; }; }));
+  const pinchOut = async (x, y) => { const a = await page.touchscreen.touchStart(x - 60, y), b = await page.touchscreen.touchStart(x + 60, y); for (let i = 1; i <= 6; i++) { await a.move(x - 60 - i * 20, y); await b.move(x + 60 + i * 20, y); } await a.end(); await b.end(); await sleep(200); };
+  // Un toque que tiembla 25 px sigue pasando página.
+  let th = await page.touchscreen.touchStart(700, 600); await th.move(712, 610); await th.move(725, 615); await th.end();
+  await atP(2); check(true, 'un toque con temblor en el borde derecho pasa página');
+  check(await barHidden(), 'al pasar página se esconde la barra');
+  await sleep(2500);
+  const t0 = Date.now(); await page.touchscreen.tap(80, 600); await atP(1);
+  const dt = Date.now() - t0; check(dt < 600, 'volver a la página anterior es inmediato (' + dt + ' ms)');
+  await pinchOut(410, 600);
+  check(/scale\((1\.[6-9]|[2-4])/.test(await tf()), 'dos dedos amplían la página (' + (await tf()) + ')');
+  const before = await tf();
+  th = await page.touchscreen.touchStart(410, 600); await th.move(380, 560); await th.move(350, 520); await th.end(); await sleep(200);
+  check((await tf()) !== before && await page.evaluate(() => document.querySelector('.spread').getAttribute('data-p') === '1'), 'con zoom, arrastrar mueve la página sin pasarla');
+  await shot('web-zoom');
+  await page.touchscreen.tap(760, 600); await atP(2);
+  check(!/scale/.test(await tf()), 'al pasar página vuelve a su tamaño');
+  await page.evaluate(() => document.querySelector('.bar').classList.remove('hidden'));
+  await click('✎ Anotar', '.bar button'); await sleep(1500);
+  const n0 = await notesN();
+  await pinchOut(410, 500);
+  check(/scale\(/.test(await tf()) && (await notesN()) === n0, 'al anotar, dos dedos amplían y no dibujan');
+  await page.evaluate(() => { const d = [...document.querySelectorAll('.abar .dot')]; d[2].click(); });
+  check(await page.evaluate(() => document.querySelectorAll('.abar .dot')[2].classList.contains('on')), 'el color cambia al primer toque');
+  await click('Listo', '.abar button'); await sleep(500);
+  await page.evaluate(() => document.querySelector('.bar').classList.remove('hidden'));
   await click('‹ Volver'); await page.waitForSelector('.tabs');
 
   // --- copias
@@ -122,7 +154,7 @@ try {
   await page.waitForSelector('.tabs', { timeout: 15000 });
   await click('Partituras', '.tab');
   await click('limpio', '.item .tapable');
-  await page.waitForFunction(() => document.querySelector('.spread') && document.querySelector('.bar .grow') && /· 1\//.test(document.querySelector('.bar .grow').textContent) && !document.querySelector('.msg').textContent, { timeout: 60000 });
+  await page.waitForFunction(() => document.querySelector('.spread') && document.querySelector('.bar .grow') && /· \d+\//.test(document.querySelector('.bar .grow').textContent) && !document.querySelector('.msg').textContent, { timeout: 60000 });
   check(true, 'sin conexión se abre la app y se lee la partitura');
   await shot('web-sin-conexion');
   await click('‹ Volver');

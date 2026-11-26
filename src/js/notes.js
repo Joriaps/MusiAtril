@@ -102,8 +102,9 @@ export class NoteLayer {
   redo() { if (this.redoList.length) { this.undoList.push(this.items); this.set(this.redoList.pop(), true); } }
 
   point(e) {
-    const r = this.slot.el.getBoundingClientRect();
-    const q = this.slot.geo.toPage(e.clientX - r.left, e.clientY - r.top);
+    // Con zoom la página está escalada: el rectángulo se divide por la escala (offsetWidth no la incluye).
+    const r = this.slot.el.getBoundingClientRect(), z = r.width / (this.slot.el.offsetWidth || r.width) || 1;
+    const q = this.slot.geo.toPage((e.clientX - r.left) / z, (e.clientY - r.top) / z);
     return [round(inRange(q[0])), round(inRange(q[1]))];
   }
 

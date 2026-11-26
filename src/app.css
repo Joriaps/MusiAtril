@@ -100,7 +100,7 @@ button.more { flex: none; min-height: 50px; padding: 6px 18px; font-size: 18px; 
 .viewer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #2b2b2b; overflow: hidden; }
 .viewer.night { background: #000; }
 .stage { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; }
-.spread { position: absolute; left: 0; right: 0; display: flex; align-items: center; justify-content: center; }
+.spread { position: absolute; left: 0; right: 0; display: flex; align-items: center; justify-content: center; -webkit-transform-origin: 0 0; transform-origin: 0 0; }
 .page { position: relative; flex: none; background: #fff; overflow: hidden; }
 .page canvas { display: block; }
 .page .over { position: absolute; top: 0; left: 0; }

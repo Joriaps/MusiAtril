@@ -147,8 +147,10 @@ try {
   await tap(60); await at(4); check(true, 'un toque a la izquierda retrocede');
   await page.keyboard.press('PageDown'); await at(5); await sleep(200); await page.keyboard.press('ArrowLeft'); await at(4); await sleep(200);
   await page.keyboard.press('Space'); await at(5); check(true, 'teclas de pedal');
+  const barHidden = () => page.evaluate(() => document.querySelector('.bar').classList.contains('hidden'));
+  check(await barHidden(), 'al pasar página la barra se esconde');
   await page.touchscreen.tap(384, 500); await sleep(150);
-  check(await page.evaluate(() => document.querySelector('.bar').classList.contains('hidden')), 'el toque central oculta la barra');
+  check(!(await barHidden()), 'el toque central enseña la barra');
   await page.touchscreen.tap(384, 500); await sleep(150);
   check(await page.evaluate(() => document.querySelectorAll('canvas').length <= 4), 'como mucho 4 lienzos vivos');
   await page.reload({ waitUntil: 'load' }); await page.waitForSelector('.viewer'); await at(5);

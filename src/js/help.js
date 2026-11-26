@@ -23,7 +23,8 @@ export function helpTab(body, toLibrary) {
   sec('Leer y pasar página',
     'Toca una partitura para abrirla.',
     'Toca en la parte derecha de la página para pasar a la siguiente, y en la parte izquierda para volver a la anterior.',
-    'Toca en el centro para ver u ocultar los botones de arriba. Con un pedal también se pasa página.');
+    'Toca en el centro para ver los botones de arriba. Se esconden solos al cabo de unos segundos. Con un pedal también se pasa página.',
+    'Para ampliar, separa dos dedos sobre la partitura. Con la página ampliada, arrastra un dedo para moverte por ella. Al pasar página vuelve a su tamaño.');
   sec('Volver a la lista',
     'Toca en el centro de la página y pulsa «Volver», arriba a la izquierda.');
   sec('Escribir en la partitura',

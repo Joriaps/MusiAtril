@@ -1,6 +1,6 @@
 // Service worker de la versión web (GitHub Pages, iOS 13 o posterior): guarda la app para usarla sin conexión.
 // El build pone la versión y la lista de archivos. ES5 escrito a mano: no pasa por Babel.
-var REV = "1.0.0-39c1a3cbdd133f7c";
+var REV = "1.0.0-d86ed6df820a4c0d";
 var FILES = ["./","app.css","app.js","icon-152.png","icon-180.png","index.html","pdf.js","pdf.worker.js","polyfills.js","prueba/limpio.pdf","prueba/mal-escaneo.pdf"];
 var CACHE = 'atril-' + REV;
 

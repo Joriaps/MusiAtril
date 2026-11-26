@@ -17,9 +17,21 @@ export function h(tag, props, ...kids) {
   return el;
 }
 
-// "click" basta en Safari 10 (touch-action: manipulation quita la espera de 300 ms).
+// Responde al levantar el dedo, aunque haya otro apoyado (la mano al anotar): con dos dedos iOS no genera "click".
+// Se admite que el dedo se mueva un poco. "click" queda para ratón, teclado y pruebas.
 export function tap(el, fn) {
-  el.addEventListener('click', (e) => { e.preventDefault(); fn(e); });
+  let start = null, fired = 0;
+  el.addEventListener('touchstart', (e) => { const t = e.changedTouches[0]; start = { x: t.clientX, y: t.clientY }; }, { passive: true });
+  el.addEventListener('touchend', (e) => {
+    const t = e.changedTouches[0], s = start;
+    start = null;
+    if (!s || el.disabled || Math.abs(t.clientX - s.x) > 20 || Math.abs(t.clientY - s.y) > 20) return;
+    e.preventDefault();
+    fired = Date.now();
+    fn(e);
+  });
+  el.addEventListener('touchcancel', () => { start = null; });
+  el.addEventListener('click', (e) => { e.preventDefault(); if (Date.now() - fired > 800) fn(e); });
 }
 
 export function clear(el) {
